@@ -81,12 +81,21 @@ get_local_ip() {
 
 send_telegram() {
     local msg="$1"
+    local parse_mode="${2:-Markdown}"
     local response curl_exit=0
-    response=$(curl -sS --max-time 10 -X POST \
-        "https://api.telegram.org/bot$BOT_TOKEN/sendMessage" \
-        --data-urlencode "chat_id=$CHAT_ID" \
-        --data-urlencode "text=$msg" \
-        --data-urlencode "parse_mode=Markdown" 2>&1) || curl_exit=$?
+    local -a curl_args
+
+    curl_args=(
+        curl -sS --max-time 10 -X POST
+        "https://api.telegram.org/bot$BOT_TOKEN/sendMessage"
+        --data-urlencode "chat_id=$CHAT_ID"
+        --data-urlencode "text=$msg"
+    )
+    if [ -n "$parse_mode" ]; then
+        curl_args+=(--data-urlencode "parse_mode=$parse_mode")
+    fi
+
+    response=$("${curl_args[@]}" 2>&1) || curl_exit=$?
     if [[ $curl_exit -eq 0 && $response == *'"ok":true'* ]]; then
         log_message "Telegram 通知发送成功。"
         return 0
@@ -273,7 +282,7 @@ IP 归属信息：
 状态：测试成功"
 
     echo "正在发送测试消息..."
-    if send_telegram "$msg"; then
+    if send_telegram "$msg" ""; then
         echo "测试成功：Telegram 已收到测试通知。"
         return 0
     fi
