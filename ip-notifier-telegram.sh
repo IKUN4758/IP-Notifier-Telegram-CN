@@ -355,6 +355,41 @@ reconfigure() {
     show_menu
 }
 
+install_shortcut() {
+    if [ "${EUID:-$(id -u)}" -ne 0 ]; then
+        echo "错误：安装 ip 快捷命令需要 root 权限，请使用 root 用户运行。"
+        return 1
+    fi
+
+    local source_path="$0"
+    local source_dir
+    local install_dir="/usr/local/libexec"
+    local bin_dir="/usr/local/bin"
+    if command -v readlink > /dev/null 2>&1; then
+        source_path="$(readlink -f "$0" 2>/dev/null || printf '%s' "$0")"
+    fi
+    source_dir="$(CDPATH= cd -- "$(dirname -- "$source_path")" && pwd)"
+
+    if [ ! -f "$source_dir/uninstall-ip-notifier.sh" ]; then
+        echo "错误：找不到 uninstall-ip-notifier.sh，请将它和主脚本放在同一目录。"
+        return 1
+    fi
+
+    install -d -m 755 "$install_dir" "$bin_dir"
+    install -m 755 "$source_path" "$install_dir/ip-notifier-telegram"
+    install -m 755 "$source_dir/uninstall-ip-notifier.sh" "$install_dir/uninstall-ip-notifier"
+    ln -sfn "$install_dir/ip-notifier-telegram" "$bin_dir/ip"
+    ln -sfn "$install_dir/ip-notifier-telegram" "$bin_dir/ip-notifier-telegram"
+    echo "安装成功，现在输入 ip 即可打开本菜单。"
+}
+
+uninstall_from_menu() {
+    if [ -x /usr/local/libexec/uninstall-ip-notifier ]; then
+        exec /usr/local/libexec/uninstall-ip-notifier
+    fi
+    echo "错误：未找到卸载程序，请先把 uninstall-ip-notifier.sh 放到主脚本旁边，或运行安装脚本。"
+}
+
 show_menu() {
     echo ""
     echo "=== Telegram 公网 IP 变更通知 ==="
@@ -362,6 +397,8 @@ show_menu() {
     echo "[2] 后台开始监测"
     echo "[3] 重新配置凭据"
     echo "[4] 退出"
+    echo "[5] 安装 ip 快捷命令"
+    echo "[6] 卸载脚本"
     echo ""
     read -rp "请选择操作：" choice
     case "$choice" in
@@ -369,6 +406,8 @@ show_menu() {
         2) start_background ;;
         3) reconfigure ;;
         4) echo "程序退出。"; exit 0 ;;
+        5) install_shortcut; show_menu ;;
+        6) uninstall_from_menu ;;
         *) echo "无效选项。"; show_menu ;;
     esac
 }
