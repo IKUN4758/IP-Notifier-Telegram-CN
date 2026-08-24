@@ -228,6 +228,54 @@ get_ipinfo_details() {
     '
 }
 
+test_notification() {
+    echo "正在获取当前公网 IPv4..."
+    local current_ip
+    if ! current_ip=$(get_external_ip); then
+        echo "测试失败：无法获取公网 IPv4，请检查服务器网络或 IPv4 出口。"
+        return 1
+    fi
+
+    local local_ip hostname time ipinfo_details
+    local ipinfo_city="未知" ipinfo_region="未知" ipinfo_country="未知"
+    local ipinfo_loc="未知" ipinfo_org="未知" ipinfo_timezone="未知"
+    local ipinfo_hostname="未知"
+
+    local_ip=$(get_local_ip)
+    hostname=$(hostname)
+    time=$(date '+%Y-%m-%d %H:%M:%S')
+    ipinfo_details=$(get_ipinfo_details "$current_ip" 2>/dev/null || true)
+    if [ -n "$ipinfo_details" ]; then
+        IFS=$'\t' read -r ipinfo_city ipinfo_region ipinfo_country ipinfo_loc ipinfo_org ipinfo_timezone ipinfo_hostname <<< "$ipinfo_details"
+    fi
+
+    local msg
+    msg="公网 IP 监测测试通知
+
+公网 IP：$current_ip
+本机 IP：$local_ip
+主机名：$hostname
+时间：$time
+
+IP 归属信息：
+城市：$ipinfo_city
+地区：$ipinfo_region
+国家：$ipinfo_country
+坐标：$ipinfo_loc
+运营商：$ipinfo_org
+时区：$ipinfo_timezone
+状态：测试成功"
+
+    echo "正在发送测试消息..."
+    if send_telegram "$msg"; then
+        echo "测试成功：Telegram 已收到测试通知。"
+        return 0
+    fi
+
+    echo "测试失败：Telegram 消息发送失败，请检查 Bot Token、Chat ID 和网络。"
+    return 1
+}
+
 start_monitoring() {
     log_message "开始监测公网 IP（检测间隔：${CHECK_INTERVAL} 秒）..."
 
@@ -426,18 +474,20 @@ show_menu() {
     echo "[1] 前台开始监测"
     echo "[2] 后台开始监测"
     echo "[3] 重新配置凭据"
-    echo "[4] 退出"
-    echo "[5] 安装 ip 快捷命令"
-    echo "[6] 卸载脚本"
+    echo "[4] 发送测试通知"
+    echo "[5] 退出"
+    echo "[6] 安装 ip 快捷命令"
+    echo "[7] 卸载脚本"
     echo ""
     read -rp "请选择操作：" choice
     case "$choice" in
         1) start_monitoring ;;
         2) start_background ;;
         3) reconfigure ;;
-        4) echo "程序退出。"; exit 0 ;;
-        5) install_shortcut; show_menu ;;
-        6) uninstall_from_menu ;;
+        4) test_notification; show_menu ;;
+        5) echo "程序退出。"; exit 0 ;;
+        6) install_shortcut; show_menu ;;
+        7) uninstall_from_menu ;;
         *) echo "无效选项。"; show_menu ;;
     esac
 }
