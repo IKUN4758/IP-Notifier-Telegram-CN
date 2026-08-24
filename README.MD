@@ -34,15 +34,15 @@ _监测公网 IP 变化，并通过 Telegram 即时通知_
 
 ### 1. 安装依赖
 
-确保系统中已安装以下命令：curl、hostname、openssl。
+确保系统中已安装以下命令：curl、hostname、openssl、jq。
 
 Debian/Ubuntu：
 
-    apt update && apt install -y curl openssl
+    apt update && apt install -y curl openssl jq
 
 CentOS/RHEL：
 
-    yum install -y curl openssl
+    yum install -y curl openssl jq
 
 ### 2. 下载并运行
 
@@ -50,11 +50,13 @@ CentOS/RHEL：
     chmod +x ip-notifier-telegram.sh
     ./ip-notifier-telegram.sh
 
-首次运行时，配置向导会要求填写 Bot Token 和 Chat ID，并设置一个用于加密凭据的密码。
+首次运行时，配置向导会要求填写 Bot Token、Chat ID 和可选的 IPinfo Token，并设置一个用于加密凭据的密码。
 
-Bot Token 可通过 Telegram 的 @BotFather 获取，数字 Chat ID 可通过 @userinfobot 获取。
+Bot Token 可通过 Telegram 的 @BotFather 获取，数字 Chat ID 可通过 @userinfobot 获取。IPinfo Token 可以留空；填写后可查询更稳定的城市、地区、运营商和时区信息。
 
-注意：不要把 Bot Token 发给别人，也不要上传包含 Token 的配置文件。
+检测到 IP 变化后，脚本会调用 IPinfo 查询归属信息，并将结果一起发送到 Telegram。IPinfo Token 和 Telegram 凭据都会加密保存在本机。
+
+注意：不要把 Bot Token 或 IPinfo Token 发给别人，也不要上传包含 Token 的配置文件。
 
 ## 🧭 启动菜单
 
