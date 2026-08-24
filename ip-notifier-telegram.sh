@@ -42,6 +42,11 @@ check_requirements() {
     done
 }
 
+validate_ipv6() {
+    local ip="$1"
+    [[ "$ip" == *:* ]] && [[ "$ip" != *[^0-9A-Fa-f:]* ]]
+}
+
 validate_ip() {
     local ip=$1
     if [[ $ip =~ ^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$ ]]; then
@@ -52,7 +57,8 @@ validate_ip() {
         done
         return 0
     fi
-    return 1
+
+    validate_ipv6 "$ip"
 }
 
 get_external_ip() {
@@ -75,17 +81,17 @@ get_local_ip() {
 
 send_telegram() {
     local msg="$1"
-    local response
-    response=$(curl -s --max-time 10 -X POST \
-        "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
-        -d chat_id="$CHAT_ID" \
-        -d text="$msg" \
-        -d parse_mode="Markdown" 2>&1)
-    if [[ $? -eq 0 && $response == *'"ok":true'* ]]; then
+    local response curl_exit=0
+    response=$(curl -sS --max-time 10 -X POST \
+        "https://api.telegram.org/bot$BOT_TOKEN/sendMessage" \
+        --data-urlencode "chat_id=$CHAT_ID" \
+        --data-urlencode "text=$msg" \
+        --data-urlencode "parse_mode=Markdown" 2>&1) || curl_exit=$?
+    if [[ $curl_exit -eq 0 && $response == *'"ok":true'* ]]; then
         log_message "Telegram 通知发送成功。"
         return 0
     else
-        log_message "Telegram 通知发送失败：${response:0:200}"
+        log_message "Telegram 通知发送失败（curl=$curl_exit）：$response"
         return 1
     fi
 }
@@ -229,10 +235,10 @@ get_ipinfo_details() {
 }
 
 test_notification() {
-    echo "正在获取当前公网 IPv4..."
+    echo "正在获取当前公网 IP（支持 IPv4/IPv6）..."
     local current_ip
     if ! current_ip=$(get_external_ip); then
-        echo "测试失败：无法获取公网 IPv4，请检查服务器网络或 IPv4 出口。"
+        echo "测试失败：无法获取公网 IP，请检查服务器网络或 IPv4/IPv6 出口。"
         return 1
     fi
 
