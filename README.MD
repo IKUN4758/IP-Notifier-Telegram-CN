@@ -47,8 +47,16 @@ CentOS/RHEL：
 ### 2. 下载并运行
 
     wget https://raw.githubusercontent.com/IKUN4758/IP-Notifier-Telegram-CN/main/ip-notifier-telegram.sh
-    chmod +x ip-notifier-telegram.sh
+    wget https://raw.githubusercontent.com/IKUN4758/IP-Notifier-Telegram-CN/main/install-ip-notifier.sh
+    wget https://raw.githubusercontent.com/IKUN4758/IP-Notifier-Telegram-CN/main/uninstall-ip-notifier.sh
+    chmod +x ip-notifier-telegram.sh install-ip-notifier.sh uninstall-ip-notifier.sh
     ./ip-notifier-telegram.sh
+
+如果希望以后直接输入 ip 打开菜单，请把以下三个文件放在同一目录，然后用 root 运行安装脚本：
+
+    ./install-ip-notifier.sh
+
+安装后输入 ip 即可打开菜单。菜单中的第 5 项可以重新安装快捷命令，第 6 项可以卸载脚本。
 
 首次运行时，配置向导会要求填写 Bot Token、Chat ID 和可选的 IPinfo Token，并设置一个用于加密凭据的密码。
 
@@ -65,6 +73,8 @@ Bot Token 可通过 Telegram 的 @BotFather 获取，数字 Chat ID 可通过 @u
     [2] 后台开始监测
     [3] 重新配置凭据
     [4] 退出
+    [5] 安装 ip 快捷命令
+    [6] 卸载脚本
 
 选择 2 可以后台运行。查看进程：
 
@@ -81,6 +91,14 @@ Bot Token 可通过 Telegram 的 @BotFather 获取，数字 Chat ID 可通过 @u
     .ip-notifier.conf.enc   加密保存的 Bot Token 和 Chat ID
     .ip-notifier.state      上一次检测到的公网 IP
     .ip-notifier.log        检测记录和错误日志
+
+## 🧹 卸载
+
+推荐在菜单中选择第 6 项。也可以直接运行：
+
+    sudo /usr/local/libexec/uninstall-ip-notifier
+
+卸载时可以选择是否删除 Telegram 凭据、IPinfo Token、状态和日志。
 
 ## 📄 许可证
 
