@@ -14,6 +14,7 @@ FORCE_NOTIFICATION=false
 
 BOT_TOKEN="${BOT_TOKEN:-}"
 CHAT_ID="${CHAT_ID:-}"
+IPINFO_TOKEN="${IPINFO_TOKEN:-}"
 
 IP_SERVICES=(
     "https://api.ipify.org"
@@ -33,7 +34,7 @@ log_message() {
 }
 
 check_requirements() {
-    for cmd in curl hostname openssl; do
+    for cmd in curl hostname openssl jq; do
         if ! command -v "$cmd" &> /dev/null; then
             echo "错误：缺少必要命令：$cmd"
             exit 1
@@ -92,8 +93,9 @@ send_telegram() {
 encrypt_config() {
     local token="$1"
     local chat_id="$2"
-    local passphrase="$3"
-    printf 'BOT_TOKEN=%s\nCHAT_ID=%s\n' "$token" "$chat_id" | \
+    local ipinfo_token="$3"
+    local passphrase="$4"
+    printf 'BOT_TOKEN=%s\nCHAT_ID=%s\nIPINFO_TOKEN=%s\n' "$token" "$chat_id" "$ipinfo_token" | \
         openssl enc -aes-256-cbc -salt -pbkdf2 -pass "pass:${passphrase}" -out "$CONFIG_FILE" 2>/dev/null
     return $?
 }
@@ -109,6 +111,7 @@ decrypt_config() {
     if ! echo "$plaintext" | grep -q '^BOT_TOKEN=' || ! echo "$plaintext" | grep -q '^CHAT_ID='; then
         return 1
     fi
+    IPINFO_TOKEN=""
     eval "$plaintext"
     return 0
 }
@@ -163,10 +166,13 @@ setup_credentials() {
         exit 1
     fi
 
+    read -rp "请输入 IPinfo Token（可留空，跳过归属地查询）：" input_ipinfo_token
+
     echo ""
     echo "正在测试 Telegram 凭据..."
     BOT_TOKEN="$input_token"
     CHAT_ID="$input_chat_id"
+    IPINFO_TOKEN="$input_ipinfo_token"
     if ! validate_telegram_credentials; then
         echo "Telegram API 测试失败，请检查 Bot Token 和 Chat ID 是否正确。"
         exit 1
@@ -189,12 +195,37 @@ setup_credentials() {
         exit 1
     fi
 
-    if encrypt_config "$BOT_TOKEN" "$CHAT_ID" "$passphrase1"; then
+    if encrypt_config "$BOT_TOKEN" "$CHAT_ID" "$IPINFO_TOKEN" "$passphrase1"; then
         echo "凭据已加密并保存。"
     else
         echo "凭据加密失败，程序退出。"
         exit 1
     fi
+}
+
+get_ipinfo_details() {
+    local ip="$1"
+    local url="https://ipinfo.io/${ip}/json"
+    local details
+
+    if [ -n "$IPINFO_TOKEN" ]; then
+        url="${url}?token=${IPINFO_TOKEN}"
+    fi
+
+    details=$(curl -s --max-time 10 "$url" 2>/dev/null || true)
+    [ -z "$details" ] && return 1
+
+    printf '%s' "$details" | jq -r '
+        [
+            (.city // "未知"),
+            (.region // "未知"),
+            (.country // "未知"),
+            (.loc // "未知"),
+            (.org // "未知"),
+            (.timezone // "未知"),
+            (.hostname // "未知")
+        ] | @tsv
+    '
 }
 
 start_monitoring() {
@@ -260,6 +291,10 @@ start_monitoring() {
             LOCAL_IP=$(get_local_ip)
             HOSTNAME=$(hostname)
             TIME=$(date '+%Y-%m-%d %H:%M:%S')
+            IPINFO_DETAILS=$(get_ipinfo_details "$CURRENT_IP" 2>/dev/null || true)
+            if [ -n "$IPINFO_DETAILS" ]; then
+                IFS="$(printf '\t')" read -r IPINFO_CITY IPINFO_REGION IPINFO_COUNTRY IPINFO_LOC IPINFO_ORG IPINFO_TIMEZONE IPINFO_HOSTNAME <<< "$IPINFO_DETAILS"
+            fi
 
             MSG="🌐 *公网 IP 监测通知*"$'\n\n'
             MSG+="📡 *公网 IP：* \`$CURRENT_IP\`"$'\n'
@@ -269,6 +304,19 @@ start_monitoring() {
 
             if [ "$IP_CHANGED" = true ] && [ -n "$LAST_IP" ]; then
                 MSG+="🔄 *旧公网 IP：* \`$LAST_IP\`"$'\n'
+            fi
+            if [ -n "$IPINFO_DETAILS" ]; then
+                MSG+=$'\n'
+                MSG+="📍 *IP 归属信息：*"$'\n'
+                MSG+="城市：$IPINFO_CITY"$'\n'
+                MSG+="地区：$IPINFO_REGION"$'\n'
+                MSG+="国家：$IPINFO_COUNTRY"$'\n'
+                MSG+="坐标：$IPINFO_LOC"$'\n'
+                MSG+="运营商：$IPINFO_ORG"$'\n'
+                MSG+="时区：$IPINFO_TIMEZONE"
+                if [ "$IPINFO_HOSTNAME" != "未知" ]; then
+                    MSG+="主机名：$IPINFO_HOSTNAME"$'\n'
+                fi
             fi
             MSG+="✅ *状态：* $STATUS_MSG"
 
@@ -290,7 +338,7 @@ start_monitoring() {
 
 start_background() {
     echo "正在后台启动监测..."
-    BOT_TOKEN="$BOT_TOKEN" CHAT_ID="$CHAT_ID" \
+    BOT_TOKEN="$BOT_TOKEN" CHAT_ID="$CHAT_ID" IPINFO_TOKEN="$IPINFO_TOKEN" \
         nohup "$0" --run-monitor > /dev/null 2>&1 &
     local pid=$!
     echo "监测已在后台启动，PID：${pid}"
@@ -302,6 +350,7 @@ reconfigure() {
     rm -f "$CONFIG_FILE"
     BOT_TOKEN=""
     CHAT_ID=""
+    IPINFO_TOKEN=""
     setup_credentials
     show_menu
 }
