@@ -383,10 +383,12 @@ start_monitoring() {
             fi
             MSG+="✅ *状态：* $STATUS_MSG"
 
-            send_telegram "$MSG"
-
-            echo "$CURRENT_IP" > "$STATE_FILE"
-            log_message "状态已更新，新的 IP 已保存。"
+            if send_telegram "$MSG" ""; then
+                echo "$CURRENT_IP" > "$STATE_FILE"
+                log_message "通知发送成功，新的 IP 已保存。"
+            else
+                log_message "通知发送失败，保留旧 IP 状态，下一轮将继续重试。"
+            fi
         else
             log_message "IP 未变化（$CURRENT_IP），不发送通知。"
         fi
