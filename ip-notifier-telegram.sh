@@ -81,7 +81,7 @@ get_local_ip() {
 
 send_telegram() {
     local msg="$1"
-    local parse_mode="${2:-Markdown}"
+    local parse_mode="${2-Markdown}"
     local response curl_exit=0
     local -a curl_args
 
