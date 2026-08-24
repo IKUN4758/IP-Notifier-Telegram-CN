@@ -370,24 +370,54 @@ install_shortcut() {
     fi
     source_dir="$(CDPATH= cd -- "$(dirname -- "$source_path")" && pwd)"
 
-    if [ ! -f "$source_dir/uninstall-ip-notifier.sh" ]; then
-        echo "错误：找不到 uninstall-ip-notifier.sh，请将它和主脚本放在同一目录。"
-        return 1
-    fi
-
     install -d -m 755 "$install_dir" "$bin_dir"
     install -m 755 "$source_path" "$install_dir/ip-notifier-telegram"
-    install -m 755 "$source_dir/uninstall-ip-notifier.sh" "$install_dir/uninstall-ip-notifier"
     ln -sfn "$install_dir/ip-notifier-telegram" "$bin_dir/ip"
     ln -sfn "$install_dir/ip-notifier-telegram" "$bin_dir/ip-notifier-telegram"
     echo "安装成功，现在输入 ip 即可打开本菜单。"
 }
 
-uninstall_from_menu() {
-    if [ -x /usr/local/libexec/uninstall-ip-notifier ]; then
-        exec /usr/local/libexec/uninstall-ip-notifier
+uninstall_script() {
+    if [ "${EUID:-$(id -u)}" -ne 0 ]; then
+        echo "错误：卸载需要 root 权限，请使用 root 用户运行。"
+        exit 1
     fi
-    echo "错误：未找到卸载程序，请先把 uninstall-ip-notifier.sh 放到主脚本旁边，或运行安装脚本。"
+
+    echo "=== Telegram 公网 IP 变更通知卸载程序 ==="
+    echo ""
+    read -rp "确定要卸载脚本和 ip 快捷命令吗？[y/N]：" confirm
+    case "$confirm" in
+        y|Y|yes|YES) ;;
+        *)
+            echo "已取消卸载。"
+            return 0
+            ;;
+    esac
+
+    local install_path="/usr/local/libexec/ip-notifier-telegram"
+    echo "正在停止后台监测进程..."
+    for pid in $(pgrep -f "${install_path} --run-monitor" 2>/dev/null || true); do
+        [ "$pid" = "$$" ] || kill "$pid" 2>/dev/null || true
+    done
+
+    rm -f /usr/local/bin/ip /usr/local/bin/ip-notifier-telegram "$install_path"
+    echo "脚本和 ip 快捷命令已卸载。"
+    echo ""
+    read -rp "是否同时删除当前用户的配置、状态和日志文件？[y/N]：" remove_data
+    case "$remove_data" in
+        y|Y|yes|YES)
+            rm -f "$HOME/.ip-notifier.conf.enc" "$HOME/.ip-notifier.state" "$HOME/.ip-notifier.log"
+            echo "配置、状态和日志已删除。"
+            ;;
+        *)
+            echo "已保留配置、状态和日志文件。"
+            ;;
+    esac
+    echo "卸载完成。"
+}
+
+uninstall_from_menu() {
+    exec "$0" --uninstall
 }
 
 show_menu() {
@@ -413,6 +443,11 @@ show_menu() {
 }
 
 # --- Entrypoint ---
+if [[ "${1:-}" == "--uninstall" ]]; then
+    uninstall_script
+    exit 0
+fi
+
 check_requirements
 
 if [[ "${1:-}" == "--run-monitor" ]]; then
